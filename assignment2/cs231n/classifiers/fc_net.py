@@ -360,7 +360,7 @@ class FullyConnectedNet(object):
             #Hidden layers
             layer_count = self.num_layers - 1
             while(layer_count > 0):
-                dout, grads['W'+str(layer_count)], grads['b'+str(layer_count)]  = affine_relu_backward(dout, caches[layer_count-1])
+                dout, grads['W'+str(layer_count)], grads['b'+str(layer_count)], grads['gamma'+str(layer_count)], grads['beta'+str(layer_count)] = affine_bn_relu_backward(dout, caches[layer_count-1])
                 grads['W'+str(layer_count)] += 2*self.reg * 0.5 * self.params['W'+str(layer_count)]
                 layer_count -= 1    
 
@@ -396,12 +396,12 @@ def affine_bn_relu_forward(x, w, b, gamma, beta, bn_param):
     return out, cache
 
 
-def affine_bn_relu_backward(dout, cache, gamma, beta, bn_param):
+def affine_bn_relu_backward(dout, cache):
     fc_cache, bn_cache, relu_cache = cache
     dbn = relu_backward(dout, relu_cache)
-    da = batchnorm_backward(dbn, bn_cache)
+    da, dgamma, dbeta = batchnorm_backward(dbn, bn_cache)
     dx, dw, db = affine_backward(da, fc_cache)
-    return dx, dw, db
+    return dx, dw, db, dgamma, dbeta
 
 
 

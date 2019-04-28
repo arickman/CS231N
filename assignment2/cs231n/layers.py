@@ -199,7 +199,7 @@ def batchnorm_forward(x, gamma, beta, bn_param):
         denom = np.sqrt(var + eps)
         x_hat = np.divide(num, denom)
         out = np.multiply(gamma, x_hat) + beta
-        cache = (x, mean, var, out, x_hat, gamma, eps)
+        cache = (x, mean, var, out, x_hat, gamma, beta, eps)
         running_mean = momentum * running_mean + (1 - momentum) * mean
         running_var = momentum * running_var + (1 - momentum) * var
         bn_param['running_mean'] = running_mean
@@ -259,7 +259,7 @@ def batchnorm_backward(dout, cache):
     # might prove to be helpful.                                              #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-    x, mean, var, shifted_input, x_hat, gamma, eps = cache
+    x, mean, var, shifted_input, x_hat, gamma, beta, eps = cache
     N,D = shifted_input.shape
     dbeta = np.matmul(np.ones(N),dout)
     dgamma = np.sum(np.multiply(x_hat, dout), axis = 0)
@@ -353,9 +353,14 @@ def layernorm_forward(x, gamma, beta, ln_param):
     # the batch norm code and leave it almost unchanged?                      #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
-
-    pass
-
+    N, D = x.shape
+    mean = 1/D * np.sum(x, axis = 1)
+    num = x.T - mean
+    var = 1/D * np.sum(np.square(num), axis = 0)
+    denom = np.sqrt(var + eps)
+    x_hat = np.divide(num, denom).T
+    out = np.multiply(gamma, x_hat) + beta
+    cache = (x, mean, var, out, x_hat, gamma, beta, eps)
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
@@ -388,9 +393,45 @@ def layernorm_backward(dout, cache):
     # still apply!                                                            #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    x, mean, var, shifted_input, x_hat, gamma, beta, eps = cache
+    N,D = shifted_input.shape
+    dbeta = np.matmul(np.ones(N),dout)
+    dgamma = np.sum(np.multiply(x_hat, dout), axis = 0)
+    N,D = D,N
+    explicit = np.divide(np.multiply(dout.T, gamma).T, np.sqrt(var + eps)).T
+    num = x - mean
+    denom = np.sqrt(var + eps)
+    deriv_denom = np.sqrt(np.power((var + eps),3))
+    int_1 = np.sum(np.multiply(dout, num), axis = 0)
+    int_2 = -1/N * np.divide(np.multiply(num.T, gamma).T, deriv_denom)
+    implicit_var = np.multiply(int_1, int_2).T
+    int_3 = np.sum(dout, axis = 0)
+    int_4 = np.multiply(np.ones((D,N)), gamma).T
+    int_5 = -1/N * np.divide(int_4, denom)
+    implicit_mu = np.multiply(int_5, int_3).T
+    dx = implicit_mu + implicit_var + explicit
 
-    pass
 
+
+
+
+
+
+    # N,D = shifted_input.shape
+    # dbeta = np.matmul(np.ones(N),dout)
+    # dgamma = np.sum(np.multiply(x_hat, dout), axis = 0)
+    # explicit = np.divide(np.multiply(dout, gamma).T, np.sqrt(var + eps)).T
+    # num = (x.T - mean).T
+    # denom = np.sqrt(var + eps)
+    # deriv_denom = np.sqrt(np.power((var + eps),3))
+    # int_1 = np.sum(np.multiply(dout, num), axis = 1)
+    # int_2 = -1/D * np.divide(np.multiply(num, gamma).T, deriv_denom)
+    # implicit_var = np.multiply(int_1, int_2).T
+    # int_3 = np.sum(dout, axis = 0)
+    # int_4 = np.multiply(np.ones((N,D)), gamma).T
+    # int_5 = -1/D * np.divide(int_4, denom).T
+    # implicit_mu = np.multiply(int_5, int_3)
+    # dx = implicit_mu + implicit_var + explicit
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
