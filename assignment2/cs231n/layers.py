@@ -261,20 +261,19 @@ def batchnorm_backward(dout, cache):
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     x, mean, var, shifted_input, x_hat, gamma, beta, eps = cache
     N,D = shifted_input.shape
+
     dbeta = np.matmul(np.ones(N),dout)
     dgamma = np.sum(np.multiply(x_hat, dout), axis = 0)
-    explicit = np.divide(np.multiply(dout, gamma), np.sqrt(var + eps))
-    num = x - mean
-    denom = np.sqrt(var + eps)
-    deriv_denom = np.sqrt(np.power((var + eps),3))
-    int_1 = np.sum(np.multiply(dout, num), axis = 0)
-    int_2 = -1/N * np.divide(np.multiply(num, gamma), deriv_denom)
-    implicit_var = np.multiply(int_1, int_2) 
-    int_3 = np.sum(dout, axis = 0)
-    int_4 = -1/N * np.divide(gamma, denom)
-    int_5 = np.multiply(np.ones((N,D)), int_4)
-    implicit_mu = np.multiply(int_5, int_3)
-    dx = implicit_mu + implicit_var + explicit
+
+    partial_x_hat = dout * gamma
+    partial_var = -1/2 * np.sum(partial_x_hat * (x - mean), axis = 0)/np.power((var + eps), 1.5)
+    partial_mu = -np.sum(partial_x_hat, axis = 0)/np.sqrt(var + eps) + partial_var * -2/N * np.sum((x - mean), axis = 0)
+    
+    explicit = partial_x_hat/np.sqrt(var + eps)
+    implicit_var = partial_var * 2/N * (x - mean)
+    implicit_mu = partial_mu/N
+
+    dx = (implicit_var + implicit_mu + explicit)
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
@@ -307,9 +306,17 @@ def batchnorm_backward_alt(dout, cache):
     # single statement; our implementation fits on a single 80-character line.#
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    x, mean, var, shifted_input, x_hat, gamma, beta, eps = cache
+    N,D = shifted_input.shape
 
-    pass
+    dbeta = np.matmul(np.ones(N),dout)
+    dgamma = np.sum(np.multiply(x_hat, dout), axis = 0)
 
+    helper1 = np.sum(dout * x_hat, axis=0)/N
+    helper2 = np.sum(dout, axis = 0)/N
+    helper3 = np.sum(x_hat, axis = 0)/N
+
+    dx = gamma * (dout - helper1 * x_hat - helper2 +  helper1 * helper3)/np.sqrt(var + eps)
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
@@ -395,37 +402,20 @@ def layernorm_backward(dout, cache):
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     x, mean, var, shifted_input, x_hat, gamma, beta, eps = cache
     N,D = shifted_input.shape
-    dbeta = np.matmul(np.ones(N),dout)
-    dgamma = np.sum(np.multiply(x_hat, dout), axis = 0)
     N,D = D,N
-    explicit = np.divide(np.multiply(dout.T, gamma).T, np.sqrt(var + eps)).T
-    num = x - mean
-    denom = np.sqrt(var + eps)
-    deriv_denom = np.sqrt(np.power((var + eps),3))
-    int_1 = np.sum(np.multiply(dout, num), axis = 0)
-    int_2 = -1/N * np.divide(np.multiply(num.T, gamma).T, deriv_denom)
-    implicit_var = np.multiply(int_1, int_2).T
-    int_3 = np.sum(dout, axis = 0)
-    int_4 = np.multiply(np.ones((D,N)), gamma).T
-    int_5 = -1/N * np.divide(int_4, denom)
-    implicit_mu = np.multiply(int_5, int_3).T
-    dx = implicit_mu + implicit_var + explicit
 
-    # N,D = shifted_input.shape
-    # dbeta = np.matmul(np.ones(N),dout)
-    # dgamma = np.sum(np.multiply(x_hat, dout), axis = 0)
-    # explicit = np.divide(np.multiply(dout, gamma).T, np.sqrt(var + eps)).T
-    # num = (x.T - mean).T
-    # denom = np.sqrt(var + eps)
-    # deriv_denom = np.sqrt(np.power((var + eps),3))
-    # int_1 = np.sum(np.multiply(dout, num), axis = 1)
-    # int_2 = -1/D * np.divide(np.multiply(num, gamma).T, deriv_denom)
-    # implicit_var = np.multiply(int_1, int_2).T
-    # int_3 = np.sum(dout, axis = 0)
-    # int_4 = np.multiply(np.ones((N,D)), gamma).T
-    # int_5 = -1/D * np.divide(int_4, denom).T
-    # implicit_mu = np.multiply(int_5, int_3)
-    # dx = implicit_mu + implicit_var + explicit
+    dbeta = np.matmul(np.ones(D),dout)
+    dgamma = np.sum(np.multiply(x_hat, dout), axis = 0)
+
+    partial_x_hat = dout * gamma
+    partial_var = -1/2 * np.sum(partial_x_hat.T * (x.T - mean), axis = 0)/np.power((var + eps), 1.5)
+    partial_mu = -np.sum(partial_x_hat.T, axis = 0)/np.sqrt(var + eps) + partial_var.T * -2/N * np.sum((x.T - mean), axis = 0)
+    
+    explicit = partial_x_hat.T/np.sqrt(var + eps)
+    implicit_var = partial_var * 2/N * (x.T - mean)
+    implicit_mu = partial_mu/N
+
+    dx = (implicit_var + implicit_mu + explicit).T
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
@@ -556,9 +546,24 @@ def conv_forward_naive(x, w, b, conv_param):
     # Hint: you can use the function np.pad for padding.                      #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    cache = (x, w, b, conv_param)
+    #some setup 
+    N, C, H, W = x.shape
+    F, C, HH, WW = w.shape
+    S = conv_param['stride']
+    P = conv_param['pad']
 
-    pass
+    #pad the input 
+    padded_input = np.copy(x)
+    padded_input = np.pad(padded_input, [(0,0), (0,0), (P,P), (P, P)], 'constant')
 
+    out = np.zeros((N, F, int(1 + (H + 2 * P - HH) / S), int(1 + (W + 2 * P - WW) / S)))
+
+
+    for x in range(int(1 + (W + 2 * P - WW) / S)):
+        for y in range(int(1 + (H + 2 * P - HH) / S)):
+            for output_channel in range(F):
+                out[:, output_channel, x, y] = np.sum(np.multiply(padded_input[:, :, S*x:(S*x + WW), S*y:(S*y + HH)], w[output_channel, :, :, :]), axis = (3,2,1)) + b[output_channel]
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
@@ -585,9 +590,31 @@ def conv_backward_naive(dout, cache):
     # TODO: Implement the convolutional backward pass.                        #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    x, w, b, conv_param = cache
+    #some setup 
+    N, C, H, W = x.shape
+    F, C, HH, WW = w.shape
+    S = conv_param['stride']
+    P = conv_param['pad']
 
-    pass
 
+    conv_width = conv_W.shape[2]
+    conv_height = conv_W.shape[3]
+    input_width = data.shape[1]
+    input_height = data.shape[2]
+    out_channels = conv_W.shape[0]
+    partial_x = np.zeros(data.shape)
+    partial_w = np.zeros(conv_W.shape)
+    partial_b = np.zeros(conv_b.shape)
+    for x in range(input_width - conv_width + 1):
+        for y in range(input_height - conv_height + 1):
+            for out_channel in range(out_channels): 
+                partial_b[out_channel] += output_grad[out_channel, x, y]
+                for in_channel in range(data.shape[0]):
+                    for dx in range(conv_width):
+                        for dy in range(conv_height):
+                            partial_x[in_channel, x + dx, y + dy] += conv_W[out_channel, in_channel, dx, dy] * output_grad[out_channel, x, y]
+                            partial_w[out_channel, in_channel, dx, dy] += data[in_channel, x + dx, y + dy]*output_grad[out_channel, x, y]
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
