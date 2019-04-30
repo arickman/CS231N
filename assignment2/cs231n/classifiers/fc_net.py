@@ -278,10 +278,14 @@ class FullyConnectedNet(object):
             gamma1 = self.params['gamma1']
             beta1 = self.params['beta1']
             caches = []
+            if self.use_dropout: drop_caches = []
             
             #First Layer
             out, cache = affine_bn_relu_forward(X, w1, b1, gamma1, beta1, self.bn_params[0])
             caches.append(cache)
+            if self.use_dropout:
+                out, cache = dropout_forward(out, self.dropout_param)
+                drop_caches.append(cache)
 
             #Hidden Layers
             num_hidden_layers = self.num_layers - 1
@@ -292,6 +296,9 @@ class FullyConnectedNet(object):
                 beta = self.params['beta'+str(i+2)]
                 out, cache = affine_bn_relu_forward(out, w, b, gamma, beta, self.bn_params[i + 1])
                 caches.append(cache)
+                if self.use_dropout:
+                    out, cache = dropout_forward(out, self.dropout_param)
+                    drop_caches.append(cache)
 
             #Last layer 
             w = self.params['W'+str(self.num_layers)]
@@ -304,10 +311,14 @@ class FullyConnectedNet(object):
             w1 = self.params['W1'] 
             b1 = self.params['b1'] 
             caches = []
+            if self.use_dropout: drop_caches = []
             
             #First Layer
             out, cache = affine_relu_forward(X, w1, b1)
             caches.append(cache)
+            if self.use_dropout:
+                out, cache = dropout_forward(out, self.dropout_param)
+                drop_caches.append(cache)
 
             #Hidden Layers
             num_hidden_layers = self.num_layers - 1
@@ -316,6 +327,9 @@ class FullyConnectedNet(object):
                 b = self.params['b'+str(i+2)]
                 out, cache = affine_relu_forward(out, w,b)
                 caches.append(cache)
+                if self.use_dropout:
+                    out, cache = dropout_forward(out, self.dropout_param)
+                    drop_caches.append(cache)
 
             #Last layer 
             w = self.params['W'+str(self.num_layers)]
@@ -360,6 +374,7 @@ class FullyConnectedNet(object):
             #Hidden layers
             layer_count = self.num_layers - 1
             while(layer_count > 0):
+                if self.use_dropout : dout = dropout_backward(dout, drop_caches[layer_count-1])
                 dout, grads['W'+str(layer_count)], grads['b'+str(layer_count)], grads['gamma'+str(layer_count)], grads['beta'+str(layer_count)] = affine_bn_relu_backward(dout, caches[layer_count-1])
                 grads['W'+str(layer_count)] += 2*self.reg * 0.5 * self.params['W'+str(layer_count)]
                 layer_count -= 1    
@@ -378,6 +393,7 @@ class FullyConnectedNet(object):
             #Hidden layers
             layer_count = self.num_layers - 1
             while(layer_count > 0):
+                if self.use_dropout : dout = dropout_backward(dout, drop_caches[layer_count-1])
                 dout, grads['W'+str(layer_count)], grads['b'+str(layer_count)]  = affine_relu_backward(dout, caches[layer_count-1])
                 grads['W'+str(layer_count)] += 2*self.reg * 0.5 * self.params['W'+str(layer_count)]
                 layer_count -= 1
