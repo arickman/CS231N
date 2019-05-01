@@ -559,11 +559,11 @@ def conv_forward_naive(x, w, b, conv_param):
 
     out = np.zeros((N, F, int(1 + (H + 2 * P - HH) / S), int(1 + (W + 2 * P - WW) / S)))
 
-
-    for x in range(int(1 + (W + 2 * P - WW) / S)):
-        for y in range(int(1 + (H + 2 * P - HH) / S)):
+    for i in range(int(1 + (H + 2 * P - HH) / S)):
+        for j in range(int(1 + (W + 2 * P - WW) / S)):
             for output_channel in range(F):
-                out[:, output_channel, x, y] = np.sum(np.multiply(padded_input[:, :, S*x:(S*x + WW), S*y:(S*y + HH)], w[output_channel, :, :, :]), axis = (3,2,1)) + b[output_channel]
+                out[:, output_channel, i, j] = np.sum(np.multiply(padded_input[:, :, S*i:(S*i + HH), S*j:(S*j + WW)],
+                 w[output_channel, :, :, :]), axis = (3,2,1)) + b[output_channel]
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
@@ -591,34 +591,32 @@ def conv_backward_naive(dout, cache):
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     x, w, b, conv_param = cache
+    #out: Output data, of shape (N, F, H', W')
     #some setup 
     N, C, H, W = x.shape
     F, C, HH, WW = w.shape
     S = conv_param['stride']
     P = conv_param['pad']
+    summed_x = np.sum(x, axis = 0)
+    summed_dout = np.sum(dout, axis = 0)
+    padded_input = np.copy(x)
+    padded_input = np.pad(padded_input, [(0,0), (0,0), (P,P), (P, P)], 'constant')
 
+    db = np.sum(dout, axis = (0, 2, 3))
+    dw = np.zeros(w.shape)
+    dx = np.zeros(padded_input.shape)
+    for i in range(int(1+(H + 2 * P - HH) / S)):
+        for j in range(int(1+(W + 2 * P - WW) / S)):
+            for f in range(F):
+                for hh in range(HH):
+                    for ww in range(WW):
+                        dx[:, :, S*i + hh, S*j + ww] += np.outer(w[f, :, hh, ww],dout[:,f, S*i, S*j]).T
+                        dw[f,:, hh, ww] += np.sum((padded_input[:, :, S*i + hh, S*j + ww].T * dout[:, f, S*i, S*j]), axis = 1).T
 
-    conv_width = conv_W.shape[2]
-    conv_height = conv_W.shape[3]
-    input_width = data.shape[1]
-    input_height = data.shape[2]
-    out_channels = conv_W.shape[0]
-    partial_x = np.zeros(data.shape)
-    partial_w = np.zeros(conv_W.shape)
-    partial_b = np.zeros(conv_b.shape)
-    for x in range(input_width - conv_width + 1):
-        for y in range(input_height - conv_height + 1):
-            for out_channel in range(out_channels): 
-                partial_b[out_channel] += output_grad[out_channel, x, y]
-                for in_channel in range(data.shape[0]):
-                    for dx in range(conv_width):
-                        for dy in range(conv_height):
-                            partial_x[in_channel, x + dx, y + dy] += conv_W[out_channel, in_channel, dx, dy] * output_grad[out_channel, x, y]
-                            partial_w[out_channel, in_channel, dx, dy] += data[in_channel, x + dx, y + dy]*output_grad[out_channel, x, y]
+    dx = dx[:,:,P:dx.shape[2] - P, P:dx.shape[3] - P]
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
-    ###########################################################################
     return dx, dw, db
 
 
@@ -646,9 +644,18 @@ def max_pool_forward_naive(x, pool_param):
     # TODO: Implement the max-pooling forward pass                            #
     ###########################################################################
     # *****START OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
+    N,C,H,W = x.shape
+    PH = pool_param['pool_height']
+    PW = pool_param['pool_width']
+    S = pool_param['stride']
+    H_out = 1 + (H - PH)/S
+    W_out = 1 + (W - PW)/S
 
-    pass
+    out = np.zeros((N,C,int(H_out), int(W_out)))
 
+    for i in range(int(H_out)):
+        for j in range(int(W_out)):
+            out[:, :, i, j] = np.amax(x[:,:,S*i:S*i + PH, S*j: S*j + PW], axis = (2,3))
     # *****END OF YOUR CODE (DO NOT DELETE/MODIFY THIS LINE)*****
     ###########################################################################
     #                             END OF YOUR CODE                            #
