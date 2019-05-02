@@ -876,7 +876,7 @@ def spatial_groupnorm_backward(dout, cache):
     partial_mu = -np.sum(partial_x_hat.T, axis = 0)/denom + partial_var.T * -2/(div) * np.sum((x.T - mean), axis = 0)
     explicit = partial_x_hat.T/denom
     implicit_var = partial_var * 2/(div) * (x.T - mean)
-    implicit_mu = partial_mu/(div)
+    implicit_mu = partial_mu/(div)gh
 
     dx = (implicit_var + implicit_mu + explicit).T
     dx = dx.reshape((N, G, C // G, H, W))
